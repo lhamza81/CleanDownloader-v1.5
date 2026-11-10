@@ -1,4 +1,4 @@
-
+9
 name: Build VideoDownloaderPro APK
 
 on:
@@ -36,8 +36,21 @@ jobs:
             "build-tools;35.0.0"
 
       - name: Build debug APK
-        working-directory: VideoDownloaderPro
-        run: gradle assembleDebug --stacktrace
+  working-directory: VideoDownloaderPro
+  shell: bash
+  run: |
+    echo "Available memory:"
+    free -h
+
+    echo "Starting Gradle build..."
+
+    gradle assembleDebug \
+      --no-daemon \
+      --max-workers=2 \
+      --stacktrace \
+      --console=plain
+  env:
+    GRADLE_OPTS: "-Xmx3g -XX:MaxMetaspaceSize=1g"
 
       - name: Verify APK
         run: test -s VideoDownloaderPro/app/build/outputs/apk/debug/app-debug.apk
