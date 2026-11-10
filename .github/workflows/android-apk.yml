@@ -2,87 +2,49 @@
 name: Build VideoDownloaderPro APK
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
-
-permissions:
-  contents: read
+  push:
+    branches: [main]
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+      - name: Unpack project
+        run: unzip -q VideoDownloaderPro-AndroidStudio-Project-v1.5-HLS-DASH-GitHub.zip
+
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Accept Android licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Install Android SDK packages
-        shell: bash
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-      - name: Find project ZIP
-        id: project
-        shell: bash
-        run: |
-          ZIP_FILE=$(find . -maxdepth 1 -type f -iname "*.zip" | head -n 1)
+      - name: Build debug APK
+        working-directory: VideoDownloaderPro
+        run: gradle assembleDebug --stacktrace
 
-          if [ -z "$ZIP_FILE" ]; then
-            echo "ERROR: No project ZIP found."
-            exit 1
-          fi
+      - name: Verify APK
+        run: test -s VideoDownloaderPro/app/build/outputs/apk/debug/app-debug.apk
 
-          echo "zip_file=$ZIP_FILE" >> "$GITHUB_OUTPUT"
-
-      - name: Extract project
-        shell: bash
-        run: |
-          mkdir -p android-project
-          unzip -q "${{ steps.project.outputs.zip_file }}" -d android-project
-
-      - name: Locate Gradle project
-        id: gradle
-        shell: bash
-        run: |
-          GRADLE_FILE=$(find android-project \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit)
-
-          if [ -z "$GRADLE_FILE" ]; then
-            echo "ERROR: Gradle settings file not found."
-            exit 1
-          fi
-
-          PROJECT_DIR=$(dirname "$GRADLE_FILE")
-          echo "project_dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
-
-      - name: Build Debug APK
-        working-directory: ${{ steps.gradle.outputs.project_dir }}
-        shell: bash
-        run: |
-          if [ ! -f ./gradlew ]; then
-            echo "ERROR: Gradle Wrapper not found."
-            exit 1
-          fi
-
-          chmod +x ./gradlew
-          ./gradlew assembleDebug --no-daemon
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: VideoDownloaderPro-APK
-          path: android-project/**/build/outputs/apk/debug/*.apk
+          name: VideoDownloaderPro-debug-apk
+          path: VideoDownloaderPro/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
